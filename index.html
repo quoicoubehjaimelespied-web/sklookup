@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>S&K Search - Advanced OSINT</title>
+    <style>
+        :root {
+            --primary: #8a2be2;
+            --secondary: #a855f7;
+            --bg-dark: #07020d;
+        }
+
+        body, html {
+            margin: 0; padding: 0;
+            background-color: var(--bg-dark);
+            color: #fff;
+            font-family: 'Segoe UI', sans-serif;
+            overflow: hidden;
+            height: 100%;
+        }
+
+        /* --- FOND ETOILES ANIMÉ --- */
+        #star-canvas {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            z-index: 1;
+        }
+
+        /* --- LOADER SCANNER (DÉMARRAGE) --- */
+        #scanner-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: var(--bg-dark);
+            z-index: 9999; display: flex; flex-direction: column; 
+            align-items: center; justify-content: center;
+            transition: opacity 0.5s ease;
+        }
+        .magnifier {
+            width: 60px; height: 60px;
+            border: 5px solid var(--secondary);
+            border-radius: 50%;
+            position: relative;
+            animation: moveScan 1.2s infinite ease-in-out;
+            box-shadow: 0 0 15px var(--secondary);
+        }
+        .magnifier::after {
+            content: ""; position: absolute;
+            top: 48px; left: 48px;
+            width: 5px; height: 25px;
+            background: var(--secondary);
+            transform: rotate(-45deg);
+            box-shadow: 0 0 10px var(--secondary);
+        }
+        .scan-text {
+            margin-top: 30px;
+            font-family: monospace;
+            text-transform: uppercase;
+            letter-spacing: 5px;
+            color: var(--secondary);
+            animation: pulseText 1s infinite;
+        }
+
+        @keyframes moveScan {
+            0%, 100% { transform: translate(-15px, -15px); }
+            50% { transform: translate(15px, 15px); }
+        }
+        @keyframes pulseText {
+            0%, 100% { opacity: 0.4; }
+            50% { opacity: 1; }
+        }
+
+        /* --- INTERFACE PRINCIPALE --- */
+        #landing-page {
+            position: relative;
+            z-index: 10;
+            display: none; height: 100vh;
+            flex-direction: column; justify-content: center; align-items: center;
+            text-align: center;
+            opacity: 0; transition: opacity 0.8s ease;
+        }
+
+        .brand-logo { font-size: 1.8rem; font-weight: 900; letter-spacing: 2px; margin-bottom: 10px; text-transform: uppercase; }
+        .brand-lookup { color: var(--secondary); text-shadow: 0 0 10px rgba(168, 85, 247, 0.4); }
+
+        .status-badge {
+            background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 6px 15px; border-radius: 4px; font-family: monospace; font-size: 0.75rem;
+            text-transform: uppercase; letter-spacing: 2px; margin-bottom: 30px;
+            display: flex; align-items: center; gap: 10px;
+        }
+        .status-dot { width: 6px; height: 6px; background: #00ff00; border-radius: 50%; box-shadow: 0 0 10px #00ff00; }
+
+        .main-title { font-size: 4.5rem; font-weight: 800; line-height: 0.9; margin: 0; text-transform: uppercase; }
+        .neon-text { color: var(--secondary); text-shadow: 0 0 15px rgba(168, 85, 247, 0.5); display: block; }
+
+        .description {
+            max-width: 500px; color: #999; font-family: monospace; font-size: 0.9rem;
+            line-height: 1.6; margin: 30px 0; text-transform: uppercase; letter-spacing: 1px;
+        }
+
+        /* INPUTS & BOUTONS */
+        .search-mode-input {
+            display: none; width: 80%; max-width: 450px; background: rgba(255,255,255,0.05);
+            border: 1px solid var(--primary); padding: 12px; color: white; font-family: monospace;
+            margin-bottom: 20px; text-align: center; border-radius: 4px; outline: none;
+        }
+        .btn-open {
+            background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.1);
+            color: #fff; padding: 15px 40px; text-transform: uppercase; font-family: monospace;
+            letter-spacing: 3px; cursor: pointer; transition: 0.3s; text-decoration: none;
+            display: flex; align-items: center; gap: 20px;
+        }
+        .btn-open:hover { background: rgba(138, 43, 226, 0.1); border-color: var(--primary); box-shadow: 0 0 20px rgba(138, 43, 226, 0.2); }
+
+        #logout-btn {
+            display: none; position: fixed; top: 20px; right: 20px;
+            color: #ff4444; font-family: monospace; text-decoration: none;
+            font-size: 0.7rem; border: 1px solid rgba(255, 68, 68, 0.3);
+            padding: 5px 10px; border-radius: 4px; z-index: 10001;
+        }
+
+        /* ZONE DE RÉSULTATS */
+        #results-area {
+            display: none; margin-top: 20px; width: 80%; max-width: 600px;
+            background: rgba(0, 0, 0, 0.6); border: 1px solid var(--primary);
+            padding: 15px; border-radius: 8px; text-align: left;
+            max-height: 250px; overflow-y: auto; font-family: monospace; font-size: 0.8rem;
+        }
+
+        /* MODAL RÈGLEMENT */
+        #modal-rules {
+            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.9); backdrop-filter: blur(5px); z-index: 10000;
+            align-items: center; justify-content: center;
+        }
+        .modal-content {
+            background: #0a0510; border: 1px solid var(--primary); padding: 40px;
+            width: 90%; max-width: 700px; border-radius: 12px; max-height: 85vh; overflow-y: auto;
+        }
+        .modal-section { margin-bottom: 20px; }
+        .modal-section h3 { color: #fff; margin-bottom: 5px; font-size: 1rem; }
+        .modal-section p { color: #aaa; font-size: 0.85rem; margin: 0; }
+    </style>
+</head>
+<body>
+
+    <canvas id="star-canvas"></canvas>
+    <a href="/auth/logout" id="logout-btn">TERMINER LA SESSION [X]</a>
+
+    <div id="scanner-overlay">
+        <div class="magnifier"></div>
+        <div class="scan-text">SCANNING SYSTEM...</div>
+    </div>
+
+    <div id="landing-page">
+        <div class="brand-logo">SK <span class="brand-lookup">LOOKUP</span></div>
+        <div class="status-badge" id="status-text"><div class="status-dot"></div>SYSTÈME EN LIGNE - INDEXATION ACTIVE</div>
+        
+        <h1 class="main-title" id="main-title-text">GESTION DE<br>BASE<br><span class="neon-text">DE DONNÉES</span></h1>
+        
+        <p class="description" id="desc-text">Capacités de recherche avancées sur des jeux de données massifs. Indexation rapide et extraction en temps réel.</p>
+        
+        <input type="text" id="search-input" class="search-mode-input" placeholder="ENTREZ UNE REQUÊTE (EMAIL, PSEUDO, IP)...">
+        
+        <a href="/auth/discord" class="btn-open" id="action-btn">Ouvrir le tableau de bord <span>></span></a>
+        
+        <button onclick="toggleModal(true)" style="background:none; border:none; color:#666; cursor:pointer; font-family:monospace; text-decoration:underline; font-size:0.75rem; margin-top:20px;">Consulter le règlement complet</button>
+
+        <div id="results-area"></div>
+    </div>
+
+    <div id="modal-rules">
+        <div class="modal-content">
+            <h2 style="color:var(--secondary); border-bottom: 1px solid var(--primary); padding-bottom: 10px;">CGU & Mentions Légales</h2>
+            <div class="modal-section">
+                <h3>Usage du service</h3>
+                <p>S&K Search est un outil d'OSINT. L'utilisateur est responsable des recherches effectuées.</p>
+            </div>
+            <div class="modal-section">
+                <h3>Données</h3>
+                <p>Nous indexons uniquement des sources accessibles publiquement sur le réseau ouvert.</p>
+            </div>
+            <button onclick="toggleModal(false)" style="background:var(--primary); color:white; border:none; padding:15px; cursor:pointer; width:100%; border-radius:5px; font-weight:bold; margin-top:10px;">J'ACCEPTE LES CONDITIONS</button>
+        </div>
+    </div>
+
+    <script>
+        // 1. ANIMATION DES ETOILES
+        const canvas = document.getElementById('star-canvas');
+        const ctx = canvas.getContext('2d');
+        let width, height, stars;
+        function initStars() {
+            width = canvas.width = window.innerWidth;
+            height = canvas.height = window.innerHeight;
+            stars = [];
+            for (let i = 0; i < 150; i++) {
+                stars.push({
+                    x: Math.random() * width,
+                    y: Math.random() * height,
+                    radius: Math.random() * 1.2 + 0.5,
+                    dy: Math.random() * 0.4 + 0.1,
+                    color: Math.random() > 0.8 ? '#a855f7' : '#ffffff'
+                });
+            }
+        }
+        function animateStars() {
+            ctx.clearRect(0, 0, width, height);
+            stars.forEach(s => {
+                ctx.fillStyle = s.color;
+                ctx.beginPath();
+                ctx.arc(s.x, s.y, s.radius, 0, Math.PI * 2);
+                ctx.fill();
+                s.y -= s.dy;
+                if (s.y < 0) s.y = height;
+            });
+            requestAnimationFrame(animateStars);
+        }
+        initStars(); animateStars();
+
+        // 2. GESTION DU CHARGEMENT (SCANNER)
+        window.addEventListener('load', () => {
+            setTimeout(() => {
+                const loader = document.getElementById('scanner-overlay');
+                const page = document.getElementById('landing-page');
+                loader.style.opacity = '0';
+                setTimeout(() => {
+                    loader.style.display = 'none';
+                    page.style.display = 'flex';
+                    setTimeout(() => page.style.opacity = '1', 50);
+                    sessionCheck();
+                }, 500);
+            }, 1500); // 1.5 seconde de scan
+        });
+
+        // 3. LOGIQUE SESSION ET RECHERCHE
+        async function sessionCheck() {
+            try {
+                const res = await fetch('/api/me');
+                const data = await res.json();
+                if (data.loggedIn) {
+                    // Modification de l'interface pour utilisateur connecté
+                    document.getElementById('logout-btn').style.display = "block";
+                    document.getElementById('status-text').innerHTML = `<div class="status-dot"></div> SESSION ACTIVE : ${data.user.username.toUpperCase()}`;
+                    document.getElementById('main-title-text').innerHTML = `RECHERCHE<br>OSINT<br><span class="neon-text">DATABASE</span>`;
+                    document.getElementById('desc-text').innerText = "Terminal sécurisé. Entrez votre cible pour extraire les données.";
+                    document.getElementById('search-input').style.display = "block";
+                    
+                    const btn = document.getElementById('action-btn');
+                    btn.href = "#"; 
+                    btn.innerHTML = `LANCER L'EXTRACTION <span>></span>`;
+                    
+                    btn.onclick = async (e) => {
+                        e.preventDefault();
+                        const query = document.getElementById('search-input').value;
+                        if(!query) return;
+
+                        const resultsArea = document.getElementById('results-area');
+                        resultsArea.style.display = "block";
+                        resultsArea.innerHTML = "<span style='color:var(--secondary)'>[SYSTEM]</span> Recherche en cours dans les nœuds distants...";
+
+                        try {
+                            const sRes = await fetch('/api/search', {
+                                method: 'POST',
+                                headers: {'Content-Type': 'application/json'},
+                                body: JSON.stringify({query: query})
+                            });
+                            const sData = await sRes.json();
+                            resultsArea.innerHTML = `<pre style="color:#00ff00; margin:0;">${JSON.stringify(sData, null, 2)}</pre>`;
+                        } catch(err) {
+                            resultsArea.innerHTML = "<span style='color:red'>[ERREUR]</span> Serveur injoignable.";
+                        }
+                    };
+                }
+            } catch (e) { console.log("Invite Mode"); }
+        }
+
+        function toggleModal(s) { document.getElementById('modal-rules').style.display = s ? 'flex' : 'none'; }
+        window.onresize = initStars;
+    </script>
+</body>
+</html>
