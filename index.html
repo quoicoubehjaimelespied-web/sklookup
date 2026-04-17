@@ -195,7 +195,7 @@
         async function sessionCheck() {
             try {
                 // On appelle ton serveur local pour savoir si on est connecté
-                const res = await fetch('http://localhost:3000/api/me');
+                const res = await fetch('https://sklookup-api.onrender.com');
                 const data = await res.json();
                 
                 if (data.loggedIn) {
